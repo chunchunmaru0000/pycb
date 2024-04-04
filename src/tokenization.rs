@@ -1,11 +1,18 @@
-use std::cmp::PartialEq;
+use std::io;
 
+#[derive(Clone, PartialEq)]
 pub enum TokenType {
     EOF,
+    DOT,
+    SEMICOLON,
+    QUOTE,
 
-    INT32,
+    INTEGER,
+    FLOAT,
+    STRING,
+    VARIABLE,
 
-    DOTED32,
+    RETURN,
 
     PLUS,
     MINUS,
@@ -17,36 +24,27 @@ impl TokenType {
     pub fn to_string(&self) -> String {
         match self {
             TokenType::EOF => "КОНЕЦ ФАЙЛА".to_string(),
+            TokenType::DOT => ".".to_string(),
+            TokenType::SEMICOLON => ";".to_string(),
+            TokenType::QUOTE => "\"".to_string(),
 
-            TokenType::INT32 => "ЧИСЛО32".to_string(),
-            TokenType::DOTED32 => "ТОЧКА32".to_string(),
+            TokenType::INTEGER => "ЧИСЛО".to_string(),
+            TokenType::FLOAT => "ТОЧКА".to_string(),
+            TokenType::STRING => "СТРОКА".to_string(),
+            TokenType::VARIABLE => "ПЕРЕМЕННАЯ".to_string(),
+
+            TokenType::RETURN => "ВОЗДАТЬ".to_string(),
 
             TokenType::PLUS => "+".to_string(),
             TokenType::MINUS => "-".to_string(),
             TokenType::MUL => "*".to_string(),
             TokenType::DIVISION => "/".to_string(),
-
             //_ => "НЕ СУЩЕСТВУЮЩИЙ ТОКЕН ПОЛАГАЮ".to_string()
-        }
-    }
-
-    pub fn clone(&self) -> TokenType {
-        match self {
-            TokenType::EOF => TokenType::EOF,
-
-            TokenType::INT32 => TokenType::INT32,
-            TokenType::DOTED32 => TokenType::DOTED32,
-
-            TokenType::PLUS => TokenType::PLUS,
-            TokenType::MINUS => TokenType::MINUS,
-            TokenType::MUL => TokenType::MUL,
-            TokenType::DIVISION => TokenType::DIVISION,
-
-            //_ => panic!()
         }
     }
 }
 
+#[derive(Clone, PartialEq)]
 pub struct Token {
     view : String,
     typed : TokenType,
@@ -55,15 +53,10 @@ pub struct Token {
 
 impl Token {
     pub fn to_string(&self) -> String{
-        format!("<{}, {}, {}>", self.view, self.typed.to_string(), self.place)
-    }
-
-    pub fn clone (&self) -> Token {
-        Token {
-            view: self.view.clone(),
-            typed: self.typed.clone(),
-            place: self.place.clone()
+        if self.typed == TokenType::STRING{
+            return  format!("<\"{}\", {}, {}>", self.view, self.typed.to_string(), self.place);
         }
+        format!("<{}, {}, {}>", self.view, self.typed.to_string(), self.place)
     }
 }
 
@@ -72,26 +65,35 @@ pub struct Tokenizator {
     position: usize,
 }
 
-impl PartialEq for TokenType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (TokenType::EOF, TokenType::EOF) => true,
-            (TokenType::INT32, TokenType::INT32) => true,
-            (TokenType::DOTED32, TokenType::DOTED32) => true,
-            (TokenType::PLUS, TokenType::PLUS) => true,
-            (TokenType::MINUS, TokenType::MINUS) => true,
-            (TokenType::MUL, TokenType::MUL) => true,
-            (TokenType::DIVISION, TokenType::DIVISION) => true,
-            _ => false
-        }
-    }
-}
-
 pub const EOF : Token = Token {
     view: String::new(),
     typed: TokenType::EOF,
     place: 0usize
 };
+
+pub fn variableable(c: char) -> bool {
+    match c {
+        '.' => false,
+        ';' => false,
+        ',' => false,
+        '"' => false,
+        '+' => false,
+        '-' => false,
+        '*' => false,
+        '/' => false,
+        ' ' => false,
+
+        '\0' => false,
+        _ => true
+    }
+}
+
+pub fn worder(view: &str) -> TokenType{
+    match view {
+        "воздать" => TokenType::RETURN,
+        _ => TokenType::VARIABLE
+    }
+}
 
 impl Tokenizator {
     pub fn new(code_from: String) -> Tokenizator {
@@ -116,9 +118,36 @@ impl Tokenizator {
         if self.current() == '\0' {
             return EOF;
         }
-        while self.current() == ' ' {
+
+        while self.current() == ' ' || self.current() == '\n' {
             self.next();
         }
+
+        if self.current() == '"' {
+            let mut buffer = String::new();
+            self.next(); // eat "
+            while self.current() != '"' {
+                self.next();
+                if self.current() == '\0' {
+                    panic!("СТРОКА БЫЛА НЕ ЗАКОНЧЕННА, БУФФЕР БЫЛ: <{}>", buffer);
+                }
+                if self.current() == '\\' {
+                    self.next();
+                    match self.current() {
+                        'н' => buffer.push('\n'),
+                        'т' => buffer.push('\t'),
+                        '\\' => buffer.push('\\'),
+                        _ => self.next()
+                    }
+                }
+                else {
+                    buffer.push(self.current());
+                }
+            }
+            self.next(); // eat "
+            return Token { view: buffer, typed: TokenType::STRING, place: self.position };
+        }
+
         if self.current().is_digit(10){
             let start = self.position;
             let mut dots = 0u8;
@@ -135,53 +164,48 @@ impl Tokenizator {
             }
 
             if dots == 0 {
-                return Token {
-                    view: self.code[start..self.position].to_string(),
-                    typed: TokenType::INT32,
-                    place: self.position
-                };
+                return Token { view: self.code[start..self.position].to_string(), typed: TokenType::INTEGER, place: self.position };
             }
             if dots == 1 {
-                return Token {
-                    view: self.code[start..self.position].to_string(),
-                    typed: TokenType::DOTED32,
-                    place: self.position
-                };
+                return Token { view: self.code[start..self.position].to_string(), typed: TokenType::FLOAT, place: self.position };
             }
             panic!("МНОГО ТОЧЕК ДЛЯ ЧИСЛА ТО ЧЕЛ");
         }
+
+        if variableable(self.current()) {
+            let start = self.position;
+            while variableable(self.current()) {
+                self.next();
+            }
+            let viewed: String = self.code[start..self.position].to_string();
+            let typeded: TokenType = worder(&viewed);
+            return Token { view: viewed, typed: typeded, place: self.position };
+        }
+
         match self.current() {
             '+' => {
                 self.next();
-                Token {
-                    view: String::from("+"),
-                    typed: TokenType::PLUS,
-                    place: self.position - 1
-                }
+                Token { view: String::from("+"), typed: TokenType::PLUS, place: self.position - 1 }
             },
             '-' => {
                 self.next();
-                Token {
-                    view: String::from("-"),
-                    typed: TokenType::MINUS,
-                    place: self.position - 1
-                }
+                Token { view: String::from("-"), typed: TokenType::MINUS, place: self.position - 1 }
             },
             '*' => {
                 self.next();
-                Token {
-                    view: String::from("*"),
-                    typed: TokenType::MUL,
-                    place: self.position - 1
-                }
+                Token { view: String::from("*"), typed: TokenType::MUL, place: self.position - 1 }
             },
             '/' => {
                 self.next();
-                Token {
-                    view: String::from("/"),
-                    typed: TokenType::DIVISION,
-                    place: self.position - 1
-                }
+                Token { view: String::from("/"), typed: TokenType::DIVISION, place: self.position - 1 }
+            },
+            '.' => {
+                self.next();
+                Token { view: String::from("."), typed: TokenType::DOT, place: self.position - 1 }
+            },
+            ';' => {
+                self.next();
+                Token { view: String::from(";"), typed: TokenType::SEMICOLON, place: self.position - 1 }
             },
             _ => {
                 self.next();
@@ -190,15 +214,21 @@ impl Tokenizator {
         }
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, io::Error> {
         let mut tokens = Vec::new();
         loop {
-            let token = self.next_token();
-            tokens.push(token.clone());
-            if token.typed == TokenType::EOF {
-                break;
+            match self.next_token(){
+                Ok(token) => {
+                    tokens.push(token);
+                    if token.typed == TokenType::EOF {
+                        break;
+                    }
+                }
+                Err(error) => return Err(error)
             }
+            //let token = self.next_token();
+
         }
-        tokens
+        Ok(tokens)
     }
 }

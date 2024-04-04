@@ -1,5 +1,3 @@
-use std::io;
-
 #[derive(Clone, PartialEq)]
 pub enum TokenType {
     EOF,
@@ -114,9 +112,17 @@ impl Tokenizator {
         self.position += 1
     }
 
-    fn next_token(&mut self) -> Token {
+    fn take_between(&mut self, start: usize, end: usize) -> String {
+        let mut text = String::new();
+        for i in start..end {
+            text.push(self.code.chars().nth(i).unwrap_or('\0').clone());
+        }
+        text
+    }
+
+    fn next_token(&mut self) -> Result<Token, String> {
         if self.current() == '\0' {
-            return EOF;
+            return Ok(EOF);
         }
 
         while self.current() == ' ' || self.current() == '\n' {
@@ -127,9 +133,9 @@ impl Tokenizator {
             let mut buffer = String::new();
             self.next(); // eat "
             while self.current() != '"' {
-                self.next();
+
                 if self.current() == '\0' {
-                    panic!("СТРОКА БЫЛА НЕ ЗАКОНЧЕННА, БУФФЕР БЫЛ: <{}>", buffer);
+                    return Err(format!("СТРОКА БЫЛА НЕ ЗАКОНЧЕНА, БУФФЕР БЫЛ: <\"{}\">", buffer));
                 }
                 if self.current() == '\\' {
                     self.next();
@@ -137,15 +143,16 @@ impl Tokenizator {
                         'н' => buffer.push('\n'),
                         'т' => buffer.push('\t'),
                         '\\' => buffer.push('\\'),
-                        _ => self.next()
+                        _ => self.next() // схера эта параша съедаеть 3 символа после вообще как
                     }
                 }
                 else {
                     buffer.push(self.current());
                 }
+                self.next();
             }
             self.next(); // eat "
-            return Token { view: buffer, typed: TokenType::STRING, place: self.position };
+            return Ok(Token { view: buffer, typed: TokenType::STRING, place: self.position });
         }
 
         if self.current().is_digit(10){
@@ -163,13 +170,8 @@ impl Tokenizator {
                 self.next();
             }
 
-            if dots == 0 {
-                return Token { view: self.code[start..self.position].to_string(), typed: TokenType::INTEGER, place: self.position };
-            }
-            if dots == 1 {
-                return Token { view: self.code[start..self.position].to_string(), typed: TokenType::FLOAT, place: self.position };
-            }
-            panic!("МНОГО ТОЧЕК ДЛЯ ЧИСЛА ТО ЧЕЛ");
+            return Ok(Token { view: self.take_between(start, self.position), typed: if dots == 0 { TokenType::INTEGER } else { TokenType::FLOAT }, place: self.position });
+            //return Err("МНОГО ТОЧЕК ДЛЯ ЧИСЛА ТО ЧЕЛ".to_string());
         }
 
         if variableable(self.current()) {
@@ -177,12 +179,12 @@ impl Tokenizator {
             while variableable(self.current()) {
                 self.next();
             }
-            let viewed: String = self.code[start..self.position].to_string();
+            let viewed: String = self.take_between(start, self.position);
             let typeded: TokenType = worder(&viewed);
-            return Token { view: viewed, typed: typeded, place: self.position };
+            return Ok(Token { view: viewed, typed: typeded, place: self.position });
         }
 
-        match self.current() {
+        let ret = match self.current() {
             '+' => {
                 self.next();
                 Token { view: String::from("+"), typed: TokenType::PLUS, place: self.position - 1 }
@@ -211,23 +213,22 @@ impl Tokenizator {
                 self.next();
                 EOF
             } //panic!("{}", format!("НЕИЗВЕСТНЫЙ СИМВОЛ {}", self.current()))
-        }
+        };
+        Ok(ret)
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, io::Error> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, String> {
         let mut tokens = Vec::new();
         loop {
             match self.next_token(){
                 Ok(token) => {
-                    tokens.push(token);
+                    tokens.push(token.clone());
                     if token.typed == TokenType::EOF {
                         break;
                     }
                 }
                 Err(error) => return Err(error)
             }
-            //let token = self.next_token();
-
         }
         Ok(tokens)
     }

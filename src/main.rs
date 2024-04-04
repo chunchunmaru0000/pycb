@@ -2,12 +2,13 @@ use std::io;
 use std::io::{Write};
 mod tokenization;
 use tokenization::Tokenizator;
+mod parserization;
 
 fn main() {
     loop{
         // tokenization
         print!("> ");
-        io::stdout().flush().expect("НЕ УДАЛОСЬ ДА");
+        io::stdout().flush().expect("НЕ УДАЛОСЬ ДА КАК");
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("НЕ УДАЛОСЬ ПРОЧИТАТЬ КОД");
         input = input.trim().to_string();
@@ -21,6 +22,7 @@ fn main() {
                 }
                 println!();
             },
+            // shall error
             Err(error) => println!("ОШИБКА: {}", error)
         }
     }

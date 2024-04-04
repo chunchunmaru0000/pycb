@@ -3,7 +3,7 @@ pub enum TokenType {
     EOF,
     DOT,
     SEMICOLON,
-    QUOTE,
+  //  QUOTE,
 
     INTEGER,
     FLOAT,
@@ -24,7 +24,7 @@ impl TokenType {
             TokenType::EOF => "КОНЕЦ ФАЙЛА".to_string(),
             TokenType::DOT => ".".to_string(),
             TokenType::SEMICOLON => ";".to_string(),
-            TokenType::QUOTE => "\"".to_string(),
+           // TokenType::QUOTE => "\"".to_string(),
 
             TokenType::INTEGER => "ЧИСЛО".to_string(),
             TokenType::FLOAT => "ТОЧКА".to_string(),
@@ -44,12 +44,20 @@ impl TokenType {
 
 #[derive(Clone, PartialEq)]
 pub struct Token {
-    view : String,
-    typed : TokenType,
-    place : usize
+    pub view : String,
+    pub typed : TokenType,
+    pub place : usize
 }
 
 impl Token {
+    pub fn new(look: String, type_of: TokenType, pos: usize) -> Token {
+        Token {
+            view: look,
+            typed: type_of,
+            place: pos
+        }
+    }
+
     pub fn to_string(&self) -> String{
         if self.typed == TokenType::STRING{
             return  format!("<\"{}\", {}, {}>", self.view, self.typed.to_string(), self.place);
@@ -63,11 +71,7 @@ pub struct Tokenizator {
     position: usize,
 }
 
-pub const EOF : Token = Token {
-    view: String::new(),
-    typed: TokenType::EOF,
-    place: 0usize
-};
+pub const EOF: Token = Token {view: String::new(), typed: TokenType::EOF, place: 0usize};
 
 pub fn variableable(c: char) -> bool {
     match c {
@@ -103,7 +107,7 @@ impl Tokenizator {
 
     fn current(&mut self) -> char {
         if self.position < self.code.len() {
-            return self.code.chars().nth(self.position).unwrap_or('?');
+            return self.code.chars().nth(self.position).unwrap_or('\0');
         }
         '\0'
     }
@@ -143,7 +147,7 @@ impl Tokenizator {
                         'н' => buffer.push('\n'),
                         'т' => buffer.push('\t'),
                         '\\' => buffer.push('\\'),
-                        _ => self.next() // схера эта параша съедаеть 3 символа после вообще как
+                        _ => {}
                     }
                 }
                 else {
@@ -152,7 +156,7 @@ impl Tokenizator {
                 self.next();
             }
             self.next(); // eat "
-            return Ok(Token { view: buffer, typed: TokenType::STRING, place: self.position });
+            return Ok(Token::new(buffer, TokenType::STRING, self.position));
         }
 
         if self.current().is_digit(10){
@@ -169,8 +173,7 @@ impl Tokenizator {
                 }
                 self.next();
             }
-
-            return Ok(Token { view: self.take_between(start, self.position), typed: if dots == 0 { TokenType::INTEGER } else { TokenType::FLOAT }, place: self.position });
+            return Ok(Token::new(self.take_between(start, self.position), if dots == 0 { TokenType::INTEGER } else { TokenType::FLOAT }, self.position));
             //return Err("МНОГО ТОЧЕК ДЛЯ ЧИСЛА ТО ЧЕЛ".to_string());
         }
 
@@ -179,35 +182,35 @@ impl Tokenizator {
             while variableable(self.current()) {
                 self.next();
             }
-            let viewed: String = self.take_between(start, self.position);
-            let typeded: TokenType = worder(&viewed);
-            return Ok(Token { view: viewed, typed: typeded, place: self.position });
+            let view: String = self.take_between(start, self.position);
+            let typed: TokenType = worder(&view);
+            return Ok(Token::new(view, typed, self.position));
         }
 
         let ret = match self.current() {
             '+' => {
                 self.next();
-                Token { view: String::from("+"), typed: TokenType::PLUS, place: self.position - 1 }
+                Token::new("+".to_string(), TokenType::PLUS, self.position - 1)
             },
             '-' => {
                 self.next();
-                Token { view: String::from("-"), typed: TokenType::MINUS, place: self.position - 1 }
+                Token::new("-".to_string(), TokenType::MINUS, self.position - 1)
             },
             '*' => {
                 self.next();
-                Token { view: String::from("*"), typed: TokenType::MUL, place: self.position - 1 }
+                Token::new("*".to_string(), TokenType::MUL, self.position - 1)
             },
             '/' => {
                 self.next();
-                Token { view: String::from("/"), typed: TokenType::DIVISION, place: self.position - 1 }
+                Token::new("/".to_string(), TokenType::DIVISION, self.position - 1)
             },
             '.' => {
                 self.next();
-                Token { view: String::from("."), typed: TokenType::DOT, place: self.position - 1 }
+                Token::new(".".to_string(), TokenType::DOT, self.position - 1)
             },
             ';' => {
                 self.next();
-                Token { view: String::from(";"), typed: TokenType::SEMICOLON, place: self.position - 1 }
+                Token::new(";".to_string(), TokenType::SEMICOLON, self.position - 1)
             },
             _ => {
                 self.next();
